@@ -4,16 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   
-  <!-- 📱 iOSネイティブアプリ（PWA）としての設定とアイコン -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="献立コンパス">
-  <!-- 🍳 オレンジ背景に目玉焼きのアイコンデータを直接埋め込み -->
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ff9500%22/><text y=%2254%22 x=%2250%22 font-size=%2260%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>🍳</text></svg>">
   
   <title>献立コンパス</title>
   <style>
-    /* 🍏 iOS風スタイリング */
     :root {
       --bg-color: #f2f2f7; --card-bg: #ffffff; --primary-color: #007aff;
       --text-main: #000000; --text-sub: #8e8e93; --border-color: #c6c6c8; --danger: #ff3b30;
@@ -107,7 +104,6 @@
     <div id="view-recipe" class="view">
       <header><h1>レシピ管理</h1></header>
       
-      <!-- レシピ登録・編集フォーム -->
       <div class="card" id="recipeFormCard" style="border: 2px solid transparent; transition: border 0.3s;">
         <div class="card-title" id="recipeFormTitle">📝 新規レシピ登録</div>
         <input type="text" id="rName" placeholder="料理名">
@@ -297,3 +293,9 @@
     }
 
     function renderChips() {
+      const container = document.getElementById("chipContainer");
+      container.innerHTML = "";
+      let allIngs = [];
+      state.recipes.forEach(r => r.ingredients.split(',').forEach(i => { const name = i.trim(); if(name && !allIngs.includes(name)) allIngs.push(name); }));
+      const missing = allIngs.filter(ing => !state.inventory.includes(ing));
+      if(missing.length === 0) { container.innerHTML = "<span style='color:var(--text-sub); f
