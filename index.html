@@ -3,19 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="献立コンパス">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ff9500%22/><text y=%2254%22 x=%2250%22 font-size=%2260%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>🍳</text></svg>">
-  
   <title>献立コンパス</title>
   <style>
-    :root {
-      --bg-color: #f2f2f7; --card-bg: #ffffff; --primary-color: #007aff;
-      --text-main: #000000; --text-sub: #8e8e93; --border-color: #c6c6c8; --danger: #ff3b30;
-      --safe-top: env(safe-area-inset-top, 44px); --safe-bottom: env(safe-area-inset-bottom, 34px);
-    }
+    :root { --bg-color: #f2f2f7; --card-bg: #ffffff; --primary-color: #007aff; --text-main: #000000; --text-sub: #8e8e93; --border-color: #c6c6c8; --danger: #ff3b30; --safe-top: env(safe-area-inset-top, 44px); --safe-bottom: env(safe-area-inset-bottom, 34px); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { background-color: var(--bg-color); font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; color: var(--text-main); overflow-x: hidden; padding-top: var(--safe-top); padding-bottom: calc(83px + var(--safe-bottom)); }
     header { padding: 16px 20px 8px; }
@@ -40,12 +34,17 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     .chip-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
     .chip { background: #e5e5ea; color: var(--primary-color); padding: 6px 12px; border-radius: 16px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
-    #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 17px; font-weight: 600; color: var(--text-sub); }
+    #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 17px; font-weight: 600; color: var(--text-sub); padding: 20px; text-align: center; }
   </style>
 </head>
 <body>
 
-  <div id="loading"><div style="font-size: 40px; margin-bottom: 16px;">🍳</div>データを同期中...</div>
+  <!-- ローディング（エラー探知機付き） -->
+  <div id="loading">
+    <div style="font-size: 40px; margin-bottom: 16px;" id="loadingIcon">🍳</div>
+    <div id="loadingText">データを同期中...<br><span style="font-size:12px; color:#aaa;">(最大10秒かかります)</span></div>
+    <div id="errorArea" style="margin-top:20px; width:100%;"></div>
+  </div>
 
   <div id="app" style="display:none;">
     <!-- 🏠 ホーム -->
@@ -68,29 +67,9 @@
     <!-- ❄️ 冷蔵庫 -->
     <div id="view-inventory" class="view">
       <header><h1>冷蔵庫</h1></header>
-      
-      <!-- 1. 現在の在庫 -->
-      <div class="card">
-        <div class="card-title">現在の在庫</div>
-        <div id="inventoryList"></div>
-      </div>
-
-      <!-- 2. 手動で追加 -->
-      <div class="card">
-        <div class="card-title">✍️ 手動で追加</div>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="invInput" placeholder="食材名" style="margin:0;">
-          <button class="btn-primary" style="width: 80px;" onclick="addInventoryManual()">追加</button>
-        </div>
-      </div>
-
-      <!-- 3. レシピ食材から追加 -->
-      <div class="card">
-        <div class="card-title">💡 レシピ食材から追加</div>
-        <div id="chipContainer" class="chip-container"></div>
-      </div>
-
-      <!-- 4. 写真をAIで読み取る -->
+      <div class="card"><div class="card-title">現在の在庫</div><div id="inventoryList"></div></div>
+      <div class="card"><div class="card-title">✍️ 手動で追加</div><div style="display: flex; gap: 8px;"><input type="text" id="invInput" placeholder="食材名" style="margin:0;"><button class="btn-primary" style="width: 80px;" onclick="addInventoryManual()">追加</button></div></div>
+      <div class="card"><div class="card-title">💡 レシピ食材から追加</div><div id="chipContainer" class="chip-container"></div></div>
       <div class="card">
         <div class="card-title">📷 写真をAIで読み取る</div>
         <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)">
@@ -103,7 +82,6 @@
     <!-- 🍳 レシピ管理 -->
     <div id="view-recipe" class="view">
       <header><h1>レシピ管理</h1></header>
-      
       <div class="card" id="recipeFormCard" style="border: 2px solid transparent; transition: border 0.3s;">
         <div class="card-title" id="recipeFormTitle">📝 新規レシピ登録</div>
         <input type="text" id="rName" placeholder="料理名">
@@ -122,11 +100,7 @@
         <button class="btn-primary" id="recipeSubmitBtn" onclick="saveRecipe()">追加する</button>
         <button class="btn-danger" id="recipeCancelBtn" style="display:none; margin-top:8px; background-color: #ffebee; color: var(--danger);" onclick="cancelEdit()">編集をキャンセル</button>
       </div>
-
-      <div class="card">
-        <div class="card-title">登録済みレシピ一覧</div>
-        <div id="recipeList"></div>
-      </div>
+      <div class="card"><div class="card-title">登録済みレシピ一覧</div><div id="recipeList"></div></div>
     </div>
   </div>
 
@@ -139,7 +113,7 @@
 
   <script>
     // ==========================================
-    // ⚙️ GASのURLだけをここに設定します！
+    // ⚙️ GASのURLだけをここに設定します！ (ダブルクォーテーション " を消さないでください！)
     // ==========================================
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyFpfCoGKjKajVX6glFXsT-X14YuqUkI2Yjya1wdDCGe5F7-CbM__ZEMDi3D805TCMW/exec";
     
@@ -147,29 +121,39 @@
     let state = { recipes: [], inventory: [], history: [], currentMenu: [] };
     let editingRecipeName = null;
 
-    window.onload = async () => {
-      await fetchData();
-      document.getElementById("loading").style.display = "none";
-      document.getElementById("app").style.display = "block";
-      renderAll();
-    };
-
+    // --- エラー探知機付き通信ロジック ---
     function jsonp(action, payload = null) {
       return new Promise((resolve, reject) => {
         const callbackName = 'jsonp_cb_' + Math.round(100000 * Math.random());
+        
+        // 10秒待って返事が来なければエラーにする（タイムアウト）
+        const timeoutId = setTimeout(() => {
+          delete window[callbackName];
+          reject(new Error("⚠️ GAS(裏側のシステム)から応答がありません。<br>・GASのアクセス権限が「全員」になっているか<br>・GASのURLが正しいか<br>を確認してください。"));
+        }, 10000);
+
         window[callbackName] = function(data) {
+          clearTimeout(timeoutId);
           delete window[callbackName];
           document.body.removeChild(script);
           resolve(data);
         };
-        let url = `${GAS_URL}?action=${action}&callback=${callbackName}`;
+
+        // iPhoneの強力なキャッシュを避けるために時刻（t）を付ける
+        let url = `${GAS_URL}?action=${action}&callback=${callbackName}&t=${Date.now()}`;
         if (payload) url += `&payload=${encodeURIComponent(JSON.stringify(payload))}`;
+        
         const script = document.createElement('script');
-        script.src = url; script.onerror = reject; document.body.appendChild(script);
+        script.src = url; 
+        script.onerror = () => {
+          clearTimeout(timeoutId);
+          reject(new Error("⚠️ 通信エラーが発生しました。<br>GAS_URLの文字が途中で欠けていないか確認してください。"));
+        };
+        document.body.appendChild(script);
       });
     }
 
-    async function fetchData() {
+    window.onload = async () => {
       try {
         const res = await jsonp('getData');
         if(res.status === 'success') {
@@ -177,14 +161,26 @@
           state.inventory = res.inventory || [];
           state.history = res.history || [];
           GEMINI_API_KEY = res.apiKey || "";
+          
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("app").style.display = "block";
+          renderAll();
+        } else {
+          throw new Error(`⚠️ GAS内でエラーが発生しました: ${res.message}<br>※スプレッドシートに「履歴」シートがあるか確認してください。`);
         }
-      } catch (e) { alert("データの読み込みに失敗しました。"); }
-    }
+      } catch (e) { 
+        // エラー探知機が作動したら画面に原因を表示する
+        document.getElementById("loadingIcon").innerText = "🚨";
+        document.getElementById("loadingText").innerHTML = `<span style="color:var(--danger); font-weight:bold;">エラーが発生しました</span>`;
+        document.getElementById("errorArea").innerHTML = `<div style="font-size:14px; background:#ffebee; color:var(--danger); padding:16px; border-radius:8px; text-align:left;">${e.message}</div><button class="btn-primary" style="margin-top:20px;" onclick="location.reload()">再読み込み</button>`;
+      }
+    };
 
     async function saveData() {
       jsonp('saveData', { recipes: state.recipes, inventory: state.inventory, history: state.history });
     }
 
+    // --- 画面切り替え ---
     function switchTab(tabId) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
@@ -197,6 +193,7 @@
       renderMenu(); renderInventory(); renderChips(); renderRecipeList();
     }
 
+    // --- 以降、献立・冷蔵庫・AIなどの機能 ---
     function getCurrentSeason() {
       const m = new Date().getMonth() + 1;
       return (m>=3 && m<=5) ? '春' : (m>=6 && m<=8) ? '夏' : (m>=9 && m<=11) ? '秋' : '冬';
@@ -298,4 +295,167 @@
       let allIngs = [];
       state.recipes.forEach(r => r.ingredients.split(',').forEach(i => { const name = i.trim(); if(name && !allIngs.includes(name)) allIngs.push(name); }));
       const missing = allIngs.filter(ing => !state.inventory.includes(ing));
-      if(missing.length === 0) { container.innerHTML = "<span style='color:var(--text-sub); f
+      if(missing.length === 0) { container.innerHTML = "<span style='color:var(--text-sub); font-size:14px;'>すべての食材が揃っています</span>"; return; }
+      missing.forEach(item => container.innerHTML += `<div class="chip" onclick="addFromChip('${item}')">＋ ${item}</div>`);
+    }
+
+    function addFromChip(item) { if(!state.inventory.includes(item)) { state.inventory.push(item); saveData(); renderAll(); } }
+
+    function resizeImage(file, maxWidth, maxHeight) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width; let height = img.height;
+            if (width > height) { if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+            } else { if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    let base64ImgData = "";
+    async function previewImage(event) {
+      const file = event.target.files[0];
+      if(!file) return;
+      document.getElementById("aiStatus").innerText = "🔄 画像を最適化中...";
+      const compressedDataUrl = await resizeImage(file, 800, 800);
+      document.getElementById("imagePreview").src = compressedDataUrl;
+      document.getElementById("imagePreview").style.display = "block";
+      document.getElementById("aiBtn").style.display = "block";
+      base64ImgData = compressedDataUrl.split(',')[1];
+      document.getElementById("aiStatus").innerText = "✅ 解析の準備ができました";
+    }
+
+    async function analyzeImage() {
+      if(!GEMINI_API_KEY) { alert("APIキーがまだGASから取得できていません。少し待つかリロードしてください。"); return; }
+      const status = document.getElementById("aiStatus");
+      status.innerText = "🔄 AIが画像を解析中...";
+      
+      const allIngs = [...new Set(state.recipes.flatMap(r => r.ingredients.split(',').map(i=>i.trim()).filter(i=>i)))];
+      const promptText = `画像に写っている食材をカンマ区切りで出力してください。
+【重要】飲み物や調味料は絶対に除外してください。
+以下の【登録済み食材リスト】にある場合はリストの表記に合わせること。
+出力は食材名のカンマ区切りのみ。
+【登録済み食材リスト】 ${allIngs.join(', ')}`;
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [ { text: promptText }, { inline_data: { mime_type: "image/jpeg", data: base64ImgData } } ] }] })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ? json.error.message : "APIエラーが発生しました");
+        if(json.candidates && json.candidates.length > 0) {
+          if(!json.candidates[0].content) {
+            status.innerHTML = `<span style="color:var(--danger);">⚠️ AIが画像の解析をブロックしました。別の画像で試してください。</span>`; return;
+          }
+          const text = json.candidates[0].content.parts[0].text;
+          const detected = text.split(',').map(i=>i.trim()).filter(i=>i);
+          let added = 0;
+          detected.forEach(item => { if(!state.inventory.includes(item)) { state.inventory.push(item); added++; } });
+          if(added > 0) saveData();
+          renderAll();
+          status.innerHTML = `<span style="color:#34c759;font-weight:bold;">✨ ${added}個追加しました！<br>(${detected.join(', ')})</span>`;
+        } else { status.innerText = "⚠️ 食材を認識できませんでした。"; }
+      } catch (e) { status.innerHTML = `<span style="color:var(--danger);">⚠️ エラー詳細: ${e.message}</span>`; }
+    }
+
+    function editRecipe(name) {
+      const r = state.recipes.find(x => x.name === name);
+      if(!r) return;
+      editingRecipeName = name;
+      document.getElementById("rName").value = r.name;
+      document.getElementById("rDiff").value = r.difficulty;
+      document.getElementById("diffLabel").innerText = r.difficulty;
+      document.getElementById("rIngs").value = r.ingredients;
+      const select = document.getElementById("rSeason");
+      const seasons = r.season.split(',').map(s=>s.trim());
+      Array.from(select.options).forEach(opt => { opt.selected = seasons.includes(opt.value); });
+      document.getElementById("recipeFormTitle").innerHTML = `✏️ 「${name}」を編集中`;
+      const submitBtn = document.getElementById("recipeSubmitBtn");
+      submitBtn.innerText = "上書き保存する";
+      submitBtn.style.backgroundColor = "#ff9500";
+      document.getElementById("recipeCancelBtn").style.display = "block";
+      document.getElementById("recipeFormCard").style.border = "2px solid #ff9500";
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+      editingRecipeName = null;
+      document.getElementById("rName").value = "";
+      document.getElementById("rIngs").value = "";
+      document.getElementById("rDiff").value = "3";
+      document.getElementById("diffLabel").innerText = "3";
+      document.getElementById("recipeFormTitle").innerHTML = "📝 新規レシピ登録";
+      const submitBtn = document.getElementById("recipeSubmitBtn");
+      submitBtn.innerText = "追加する";
+      submitBtn.style.backgroundColor = "var(--primary-color)";
+      document.getElementById("recipeCancelBtn").style.display = "none";
+      document.getElementById("recipeFormCard").style.border = "2px solid transparent";
+    }
+
+    function saveRecipe() {
+      const name = document.getElementById("rName").value.trim();
+      const diff = document.getElementById("rDiff").value;
+      const ings = document.getElementById("rIngs").value.trim();
+      const seasonSelect = document.getElementById("rSeason");
+      const seasons = Array.from(seasonSelect.selectedOptions).map(opt => opt.value).join(', ');
+
+      if (name && ings) {
+        if(editingRecipeName) {
+           if (name !== editingRecipeName && state.recipes.some(r => r.name === name)) { alert("既に同じ名前のレシピが存在します"); return; }
+           const idx = state.recipes.findIndex(r => r.name === editingRecipeName);
+           state.recipes[idx] = { name: name, difficulty: diff, ingredients: ings, season: seasons };
+           alert("レシピを更新しました！");
+           cancelEdit();
+        } else {
+           if(state.recipes.some(r => r.name === name)) { alert("既に登録されています"); return; }
+           state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons });
+           alert("レシピを追加しました！");
+           cancelEdit();
+        }
+        saveData(); renderAll();
+      } else { alert("未入力の項目があります。"); }
+    }
+
+    function removeRecipe(name) {
+      if(confirm(`「${name}」を削除してもよろしいですか？`)) {
+        state.recipes = state.recipes.filter(r => r.name !== name);
+        saveData(); renderAll();
+      }
+    }
+
+    function renderRecipeList() {
+      const list = document.getElementById("recipeList");
+      list.innerHTML = "";
+      state.recipes.forEach(r => {
+        list.innerHTML += `
+          <div class="list-item" style="display:block;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight:600;">${r.name}</span>
+              <div>
+                <button class="btn-secondary" style="width: auto; padding: 6px 12px; font-size:14px; margin-right:4px;" onclick="editRecipe('${r.name}')">✏️ 編集</button>
+                <button class="btn-danger" style="width: auto; padding: 6px 12px; font-size:14px;" onclick="removeRecipe('${r.name}')">🗑 削除</button>
+              </div>
+            </div>
+            <div style="font-size:13px; color:var(--text-sub); margin-top:4px;">難易度: ${r.difficulty} | 季節: ${r.season}</div>
+            <div style="font-size:14px; margin-top:4px;">🥕 ${r.ingredients}</div>
+          </div>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>
