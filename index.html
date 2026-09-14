@@ -6,8 +6,36 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="献立コンパス">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23ff9500%22/><text y=%2254%22 x=%2250%22 font-size=%2260%22 text-anchor=%22middle%22 dominant-baseline=%22central%22>🍳</text></svg>">
   <title>献立コンパス</title>
+
+  <!-- 📱 料理アイコン（🍳）を超高画質なPNGとして自動生成する裏技スクリプト -->
+  <script>
+    (function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 180; canvas.height = 180;
+      const ctx = canvas.getContext('2d');
+      
+      // 背景を美しいオレンジのグラデーションに
+      const grad = ctx.createLinearGradient(0, 0, 180, 180);
+      grad.addColorStop(0, '#ffaf38');
+      grad.addColorStop(1, '#ff9500');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 180, 180);
+      
+      // 料理のアイコン（🍳）を描画
+      ctx.font = '100px "Apple Color Emoji", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🍳', 90, 100);
+      
+      // iPhone用のアイコンとして設定
+      const link = document.createElement('link');
+      link.rel = 'apple-touch-icon';
+      link.href = canvas.toDataURL('image/png');
+      document.head.appendChild(link);
+    })();
+  </script>
+
   <style>
     :root { --bg-color: #f2f2f7; --card-bg: #ffffff; --primary-color: #007aff; --text-main: #000000; --text-sub: #8e8e93; --border-color: #c6c6c8; --danger: #ff3b30; --safe-top: env(safe-area-inset-top, 44px); --safe-bottom: env(safe-area-inset-bottom, 34px); }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -39,9 +67,8 @@
 </head>
 <body>
 
-  <!-- ローディング（エラー探知機付き） -->
   <div id="loading">
-    <div style="font-size: 40px; margin-bottom: 16px;" id="loadingIcon">🍳</div>
+    <div id="loadingIcon" style="font-size: 40px; margin-bottom: 16px;">🍳</div>
     <div id="loadingText">データを同期中...<br><span style="font-size:12px; color:#aaa;">(最大10秒かかります)</span></div>
     <div id="errorArea" style="margin-top:20px; width:100%;"></div>
   </div>
@@ -113,7 +140,7 @@
 
   <script>
     // ==========================================
-    // ⚙️ GASのURLだけをここに設定します！ (ダブルクォーテーション " を消さないでください！)
+    // ⚙️ GASのURLだけをここに設定します！
     // ==========================================
     const GAS_URL = "https://script.google.com/macros/s/AKfycbxaeB6OHu8Y-l95ZdG2dxbyq_KPTu0zsGfr6VeAGwVlrcSOpVk75lehGzNlPIWQsyya/exec";
     
@@ -121,12 +148,9 @@
     let state = { recipes: [], inventory: [], history: [], currentMenu: [] };
     let editingRecipeName = null;
 
-    // --- エラー探知機付き通信ロジック ---
     function jsonp(action, payload = null) {
       return new Promise((resolve, reject) => {
         const callbackName = 'jsonp_cb_' + Math.round(100000 * Math.random());
-        
-        // 10秒待って返事が来なければエラーにする（タイムアウト）
         const timeoutId = setTimeout(() => {
           delete window[callbackName];
           reject(new Error("⚠️ GAS(裏側のシステム)から応答がありません。<br>・GASのアクセス権限が「全員」になっているか<br>・GASのURLが正しいか<br>を確認してください。"));
@@ -139,16 +163,11 @@
           resolve(data);
         };
 
-        // iPhoneの強力なキャッシュを避けるために時刻（t）を付ける
         let url = `${GAS_URL}?action=${action}&callback=${callbackName}&t=${Date.now()}`;
         if (payload) url += `&payload=${encodeURIComponent(JSON.stringify(payload))}`;
-        
         const script = document.createElement('script');
         script.src = url; 
-        script.onerror = () => {
-          clearTimeout(timeoutId);
-          reject(new Error("⚠️ 通信エラーが発生しました。<br>GAS_URLの文字が途中で欠けていないか確認してください。"));
-        };
+        script.onerror = () => { clearTimeout(timeoutId); reject(new Error("⚠️ 通信エラーが発生しました。")); };
         document.body.appendChild(script);
       });
     }
@@ -161,26 +180,19 @@
           state.inventory = res.inventory || [];
           state.history = res.history || [];
           GEMINI_API_KEY = res.apiKey || "";
-          
           document.getElementById("loading").style.display = "none";
           document.getElementById("app").style.display = "block";
           renderAll();
-        } else {
-          throw new Error(`⚠️ GAS内でエラーが発生しました: ${res.message}<br>※スプレッドシートに「履歴」シートがあるか確認してください。`);
-        }
+        } else { throw new Error(`⚠️ GAS内でエラーが発生しました: ${res.message}`); }
       } catch (e) { 
-        // エラー探知機が作動したら画面に原因を表示する
         document.getElementById("loadingIcon").innerText = "🚨";
         document.getElementById("loadingText").innerHTML = `<span style="color:var(--danger); font-weight:bold;">エラーが発生しました</span>`;
         document.getElementById("errorArea").innerHTML = `<div style="font-size:14px; background:#ffebee; color:var(--danger); padding:16px; border-radius:8px; text-align:left;">${e.message}</div><button class="btn-primary" style="margin-top:20px;" onclick="location.reload()">再読み込み</button>`;
       }
     };
 
-    async function saveData() {
-      jsonp('saveData', { recipes: state.recipes, inventory: state.inventory, history: state.history });
-    }
+    async function saveData() { jsonp('saveData', { recipes: state.recipes, inventory: state.inventory, history: state.history }); }
 
-    // --- 画面切り替え ---
     function switchTab(tabId) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
@@ -189,11 +201,8 @@
       renderAll();
     }
 
-    function renderAll() {
-      renderMenu(); renderInventory(); renderChips(); renderRecipeList();
-    }
+    function renderAll() { renderMenu(); renderInventory(); renderChips(); renderRecipeList(); }
 
-    // --- 以降、献立・冷蔵庫・AIなどの機能 ---
     function getCurrentSeason() {
       const m = new Date().getMonth() + 1;
       return (m>=3 && m<=5) ? '春' : (m>=6 && m<=8) ? '夏' : (m>=9 && m<=11) ? '秋' : '冬';
@@ -231,9 +240,7 @@
         if(!recipe) return;
         const ings = recipe.ingredients.split(',').map(item => item.trim()).filter(i=>i);
         let ingsHtml = "";
-        ings.forEach(ing => {
-          ingsHtml += state.inventory.includes(ing) ? `<span class="strikethrough">~${ing}~</span>, ` : `<span>${ing}</span>, `;
-        });
+        ings.forEach(ing => { ingsHtml += state.inventory.includes(ing) ? `<span class="strikethrough">~${ing}~</span>, ` : `<span>${ing}</span>, `; });
         
         let selectHtml = `<select onchange="changeMenu(${i}, this.value)">`;
         allRecipeNames.forEach(name => { selectHtml += `<option value="${name}" ${name === menuName ? 'selected' : ''}>${name}</option>`; });
@@ -271,19 +278,14 @@
 
     function addInventoryManual() {
       const val = document.getElementById("invInput").value.trim();
-      if (val && !state.inventory.includes(val)) {
-        state.inventory.push(val); document.getElementById("invInput").value = "";
-        saveData(); renderAll();
-      }
+      if (val && !state.inventory.includes(val)) { state.inventory.push(val); document.getElementById("invInput").value = ""; saveData(); renderAll(); }
     }
     function removeInventory(item) { state.inventory = state.inventory.filter(i => i !== item); saveData(); renderAll(); }
     
     function renderInventory() {
       const list = document.getElementById("inventoryList");
       list.innerHTML = "";
-      if (state.inventory.length === 0) {
-        list.innerHTML = "<span style='color:var(--text-sub); font-size:14px;'>冷蔵庫は空です</span>";
-      }
+      if (state.inventory.length === 0) list.innerHTML = "<span style='color:var(--text-sub); font-size:14px;'>冷蔵庫は空です</span>";
       state.inventory.forEach(item => {
         list.innerHTML += `<div class="list-item"><span>${item}</span><button class="btn-danger" style="width: auto; padding: 6px 16px; font-size:14px;" onclick="removeInventory('${item}')">消費</button></div>`;
       });
@@ -336,31 +338,24 @@
     }
 
     async function analyzeImage() {
-      if(!GEMINI_API_KEY) { alert("APIキーがまだGASから取得できていません。少し待つかリロードしてください。"); return; }
+      if(!GEMINI_API_KEY) { alert("APIキーがまだGASから取得できていません。"); return; }
       const status = document.getElementById("aiStatus");
       status.innerText = "🔄 AIが画像を解析中...";
       
       const allIngs = [...new Set(state.recipes.flatMap(r => r.ingredients.split(',').map(i=>i.trim()).filter(i=>i)))];
       const promptText = `画像に写っている食材をカンマ区切りで出力してください。
 【重要】飲み物や調味料は絶対に除外してください。
-以下の【登録済み食材リスト】にある場合はリストの表記に合わせること。
-出力は食材名のカンマ区切りのみ。
+以下の【登録済み食材リスト】にある場合はリストの表記に合わせること。出力は食材名のカンマ区切りのみ。
 【登録済み食材リスト】 ${allIngs.join(', ')}`;
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
       
       try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [ { text: promptText }, { inline_data: { mime_type: "image/jpeg", data: base64ImgData } } ] }] })
-        });
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [ { text: promptText }, { inline_data: { mime_type: "image/jpeg", data: base64ImgData } } ] }] }) });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ? json.error.message : "APIエラーが発生しました");
         if(json.candidates && json.candidates.length > 0) {
-          if(!json.candidates[0].content) {
-            status.innerHTML = `<span style="color:var(--danger);">⚠️ AIが画像の解析をブロックしました。別の画像で試してください。</span>`; return;
-          }
+          if(!json.candidates[0].content) { status.innerHTML = `<span style="color:var(--danger);">⚠️ AIがブロックしました。</span>`; return; }
           const text = json.candidates[0].content.parts[0].text;
           const detected = text.split(',').map(i=>i.trim()).filter(i=>i);
           let added = 0;
@@ -412,29 +407,23 @@
       const ings = document.getElementById("rIngs").value.trim();
       const seasonSelect = document.getElementById("rSeason");
       const seasons = Array.from(seasonSelect.selectedOptions).map(opt => opt.value).join(', ');
-
       if (name && ings) {
         if(editingRecipeName) {
            if (name !== editingRecipeName && state.recipes.some(r => r.name === name)) { alert("既に同じ名前のレシピが存在します"); return; }
            const idx = state.recipes.findIndex(r => r.name === editingRecipeName);
            state.recipes[idx] = { name: name, difficulty: diff, ingredients: ings, season: seasons };
-           alert("レシピを更新しました！");
-           cancelEdit();
+           alert("レシピを更新しました！"); cancelEdit();
         } else {
            if(state.recipes.some(r => r.name === name)) { alert("既に登録されています"); return; }
            state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons });
-           alert("レシピを追加しました！");
-           cancelEdit();
+           alert("レシピを追加しました！"); cancelEdit();
         }
         saveData(); renderAll();
       } else { alert("未入力の項目があります。"); }
     }
 
     function removeRecipe(name) {
-      if(confirm(`「${name}」を削除してもよろしいですか？`)) {
-        state.recipes = state.recipes.filter(r => r.name !== name);
-        saveData(); renderAll();
-      }
+      if(confirm(`「${name}」を削除してもよろしいですか？`)) { state.recipes = state.recipes.filter(r => r.name !== name); saveData(); renderAll(); }
     }
 
     function renderRecipeList() {
