@@ -60,32 +60,17 @@
       </div>
     </div>
 
-    <!-- ❄️ 冷蔵庫 (並び順を変更しました) -->
+    <!-- ❄️ 冷蔵庫 -->
     <div id="view-inventory" class="view">
       <header><h1>冷蔵庫</h1></header>
       
-      <!-- 1. 現在の在庫（一番上に移動） -->
+      <!-- 1. 現在の在庫（一番上に固定） -->
       <div class="card">
         <div class="card-title">現在の在庫</div>
         <div id="inventoryList"></div>
       </div>
 
-      <!-- 2. レシピ食材から追加 -->
-      <div class="card">
-        <div class="card-title">💡 レシピ食材から追加</div>
-        <div id="chipContainer" class="chip-container"></div>
-      </div>
-
-      <!-- 3. 写真をAIで読み取る -->
-      <div class="card">
-        <div class="card-title">📷 写真をAIで読み取る</div>
-        <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)">
-        <img id="imagePreview" style="width: 100%; border-radius: 8px; margin-bottom: 12px; display: none;">
-        <button class="btn-primary" id="aiBtn" style="display:none;" onclick="analyzeImage()">✨ AIで解析する</button>
-        <div id="aiStatus" style="margin-top: 8px; font-size: 14px; color: var(--text-sub);"></div>
-      </div>
-      
-      <!-- 4. 手動で追加 -->
+      <!-- 2. 手動で追加 -->
       <div class="card">
         <div class="card-title">✍️ 手動で追加</div>
         <div style="display: flex; gap: 8px;">
@@ -93,13 +78,28 @@
           <button class="btn-primary" style="width: 80px;" onclick="addInventoryManual()">追加</button>
         </div>
       </div>
+
+      <!-- 3. レシピ食材から追加 -->
+      <div class="card">
+        <div class="card-title">💡 レシピ食材から追加</div>
+        <div id="chipContainer" class="chip-container"></div>
+      </div>
+
+      <!-- 4. 写真をAIで読み取る -->
+      <div class="card">
+        <div class="card-title">📷 写真をAIで読み取る</div>
+        <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)">
+        <img id="imagePreview" style="width: 100%; border-radius: 8px; margin-bottom: 12px; display: none;">
+        <button class="btn-primary" id="aiBtn" style="display:none;" onclick="analyzeImage()">✨ AIで解析する</button>
+        <div id="aiStatus" style="margin-top: 8px; font-size: 14px; color: var(--text-sub);"></div>
+      </div>
     </div>
 
     <!-- 🍳 レシピ管理 -->
     <div id="view-recipe" class="view">
       <header><h1>レシピ管理</h1></header>
       
-      <!-- レシピ登録・編集フォーム（編集時は枠がオレンジになります） -->
+      <!-- レシピ登録・編集フォーム -->
       <div class="card" id="recipeFormCard" style="border: 2px solid transparent; transition: border 0.3s;">
         <div class="card-title" id="recipeFormTitle">📝 新規レシピ登録</div>
         <input type="text" id="rName" placeholder="料理名">
@@ -137,9 +137,9 @@
     // ==========================================
     // ⚙️ GASのURLだけをここに設定します！
     // ==========================================
-    const GAS_URL = "";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyFpfCoGKjKajVX6glFXsT-X14YuqUkI2Yjya1wdDCGe5F7-CbM__ZEMDi3D805TCMW/exec";
     
-    let GEMINI_API_KEY = "https://script.google.com/macros/s/AKfycbyFpfCoGKjKajVX6glFXsT-X14YuqUkI2Yjya1wdDCGe5F7-CbM__ZEMDi3D805TCMW/exec";
+    let GEMINI_API_KEY = "";
     let state = { recipes: [], inventory: [], history: [], currentMenu: [] };
     let editingRecipeName = null;
 
@@ -349,7 +349,7 @@
 出力は食材名のカンマ区切りのみ。
 【登録済み食材リスト】 ${allIngs.join(', ')}`;
 
-      // 🔥 正しいモデル名（gemini-3.6-flash）に修正しました！
+      // 🔥 ご指定の最新モデル gemini-3.6-flash に変更しました！
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
       
       try {
@@ -361,12 +361,17 @@
         
         const json = await res.json();
         
-        // API側でエラーが出た場合は詳細を表示する
         if (!res.ok) {
            throw new Error(json.error ? json.error.message : "APIエラーが発生しました");
         }
 
         if(json.candidates && json.candidates.length > 0) {
+          // AIのセーフティフィルター対策（画像が不適切として空で返された場合）
+          if(!json.candidates[0].content) {
+            status.innerHTML = `<span style="color:var(--danger);">⚠️ AIが画像の解析をブロックしました。別の画像で試してください。</span>`;
+            return;
+          }
+
           const text = json.candidates[0].content.parts[0].text;
           const detected = text.split(',').map(i=>i.trim()).filter(i=>i);
           let added = 0;
@@ -379,7 +384,8 @@
           status.innerText = "⚠️ 食材を認識できませんでした。";
         }
       } catch (e) {
-        status.innerHTML = `<span style="color:var(--danger);">⚠️ エラー: ${e.message}</span>`;
+        // エラー内容を画面にしっかり出力して原因を究明しやすくしました
+        status.innerHTML = `<span style="color:var(--danger);">⚠️ エラー詳細: ${e.message}</span>`;
       }
     }
 
@@ -397,11 +403,10 @@
       const seasons = r.season.split(',').map(s=>s.trim());
       Array.from(select.options).forEach(opt => { opt.selected = seasons.includes(opt.value); });
       
-      // 🌟 編集モードになったことを分かりやすくするUI変更
       document.getElementById("recipeFormTitle").innerHTML = `✏️ 「${name}」を編集中`;
       const submitBtn = document.getElementById("recipeSubmitBtn");
       submitBtn.innerText = "上書き保存する";
-      submitBtn.style.backgroundColor = "#ff9500"; // オレンジ色に変更
+      submitBtn.style.backgroundColor = "#ff9500";
       
       document.getElementById("recipeCancelBtn").style.display = "block";
       document.getElementById("recipeFormCard").style.border = "2px solid #ff9500";
@@ -445,4 +450,40 @@
            if(state.recipes.some(r => r.name === name)) {
              alert("既に登録されています"); return;
            }
-           state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons })
+           state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons });
+           alert("レシピを追加しました！");
+           cancelEdit();
+        }
+        saveData(); renderAll();
+      } else { alert("未入力の項目があります。"); }
+    }
+
+    function removeRecipe(name) {
+      if(confirm(`「${name}」を削除してもよろしいですか？`)) {
+        state.recipes = state.recipes.filter(r => r.name !== name);
+        saveData(); renderAll();
+      }
+    }
+
+    function renderRecipeList() {
+      const list = document.getElementById("recipeList");
+      list.innerHTML = "";
+      state.recipes.forEach(r => {
+        list.innerHTML += `
+          <div class="list-item" style="display:block;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight:600;">${r.name}</span>
+              <div>
+                <button class="btn-secondary" style="width: auto; padding: 6px 12px; font-size:14px; margin-right:4px;" onclick="editRecipe('${r.name}')">✏️ 編集</button>
+                <button class="btn-danger" style="width: auto; padding: 6px 12px; font-size:14px;" onclick="removeRecipe('${r.name}')">🗑 削除</button>
+              </div>
+            </div>
+            <div style="font-size:13px; color:var(--text-sub); margin-top:4px;">難易度: ${r.difficulty} | 季節: ${r.season}</div>
+            <div style="font-size:14px; margin-top:4px;">🥕 ${r.ingredients}</div>
+          </div>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>
