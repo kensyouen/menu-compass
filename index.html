@@ -40,11 +40,7 @@
 </head>
 <body>
 
-  <!-- ローディング -->
-  <div id="loading">
-    <div style="font-size: 40px; margin-bottom: 16px;">🍳</div>
-    データを同期中...
-  </div>
+  <div id="loading"><div style="font-size: 40px; margin-bottom: 16px;">🍳</div>データを同期中...</div>
 
   <div id="app" style="display:none;">
     <!-- 🏠 ホーム -->
@@ -64,16 +60,23 @@
       </div>
     </div>
 
-    <!-- ❄️ 冷蔵庫 -->
+    <!-- ❄️ 冷蔵庫 (並び順を変更しました) -->
     <div id="view-inventory" class="view">
       <header><h1>冷蔵庫</h1></header>
+      
+      <!-- 1. 現在の在庫（一番上に移動） -->
       <div class="card">
-        <div class="card-title">✍️ 手動で追加</div>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="invInput" placeholder="食材名" style="margin:0;">
-          <button class="btn-primary" style="width: 80px;" onclick="addInventoryManual()">追加</button>
-        </div>
+        <div class="card-title">現在の在庫</div>
+        <div id="inventoryList"></div>
       </div>
+
+      <!-- 2. レシピ食材から追加 -->
+      <div class="card">
+        <div class="card-title">💡 レシピ食材から追加</div>
+        <div id="chipContainer" class="chip-container"></div>
+      </div>
+
+      <!-- 3. 写真をAIで読み取る -->
       <div class="card">
         <div class="card-title">📷 写真をAIで読み取る</div>
         <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)">
@@ -81,21 +84,23 @@
         <button class="btn-primary" id="aiBtn" style="display:none;" onclick="analyzeImage()">✨ AIで解析する</button>
         <div id="aiStatus" style="margin-top: 8px; font-size: 14px; color: var(--text-sub);"></div>
       </div>
+      
+      <!-- 4. 手動で追加 -->
       <div class="card">
-        <div class="card-title">💡 レシピ食材から追加</div>
-        <div id="chipContainer" class="chip-container"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">現在の在庫</div>
-        <div id="inventoryList"></div>
+        <div class="card-title">✍️ 手動で追加</div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="invInput" placeholder="食材名" style="margin:0;">
+          <button class="btn-primary" style="width: 80px;" onclick="addInventoryManual()">追加</button>
+        </div>
       </div>
     </div>
 
     <!-- 🍳 レシピ管理 -->
     <div id="view-recipe" class="view">
       <header><h1>レシピ管理</h1></header>
-      <!-- レシピ登録・編集フォーム -->
-      <div class="card">
+      
+      <!-- レシピ登録・編集フォーム（編集時は枠がオレンジになります） -->
+      <div class="card" id="recipeFormCard" style="border: 2px solid transparent; transition: border 0.3s;">
         <div class="card-title" id="recipeFormTitle">📝 新規レシピ登録</div>
         <input type="text" id="rName" placeholder="料理名">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -111,7 +116,7 @@
           <option value="冬">冬 (12-2月)</option>
         </select>
         <button class="btn-primary" id="recipeSubmitBtn" onclick="saveRecipe()">追加する</button>
-        <button class="btn-secondary" id="recipeCancelBtn" style="display:none; margin-top:8px;" onclick="cancelEdit()">キャンセル</button>
+        <button class="btn-danger" id="recipeCancelBtn" style="display:none; margin-top:8px; background-color: #ffebee; color: var(--danger);" onclick="cancelEdit()">編集をキャンセル</button>
       </div>
 
       <div class="card">
@@ -132,13 +137,11 @@
     // ==========================================
     // ⚙️ GASのURLだけをここに設定します！
     // ==========================================
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbyFpfCoGKjKajVX6glFXsT-X14YuqUkI2Yjya1wdDCGe5F7-CbM__ZEMDi3D805TCMW/exec";
+    const GAS_URL = "";
     
-    // GASから起動時にこっそりAPIキーを受け取ります（手入力不要！）
-    let GEMINI_API_KEY = "";
-    
+    let GEMINI_API_KEY = "https://script.google.com/macros/s/AKfycbyFpfCoGKjKajVX6glFXsT-X14YuqUkI2Yjya1wdDCGe5F7-CbM__ZEMDi3D805TCMW/exec";
     let state = { recipes: [], inventory: [], history: [], currentMenu: [] };
-    let editingRecipeName = null; // レシピ編集用の変数
+    let editingRecipeName = null;
 
     window.onload = async () => {
       await fetchData();
@@ -169,7 +172,7 @@
           state.recipes = res.recipes || [];
           state.inventory = res.inventory || [];
           state.history = res.history || [];
-          GEMINI_API_KEY = res.apiKey || ""; // GASから安全にキーを受け取る
+          GEMINI_API_KEY = res.apiKey || "";
         }
       } catch (e) { alert("データの読み込みに失敗しました。"); }
     }
@@ -190,7 +193,6 @@
       renderMenu(); renderInventory(); renderChips(); renderRecipeList();
     }
 
-    // 【献立ロジック】
     function getCurrentSeason() {
       const m = new Date().getMonth() + 1;
       return (m>=3 && m<=5) ? '春' : (m>=6 && m<=8) ? '夏' : (m>=9 && m<=11) ? '秋' : '冬';
@@ -266,7 +268,6 @@
       navigator.clipboard ? navigator.clipboard.writeText(text).then(() => alert("LINE用にコピーしました！")) : alert("コピー機能がサポートされていません。");
     }
 
-    // 【冷蔵庫ロジック】
     function addInventoryManual() {
       const val = document.getElementById("invInput").value.trim();
       if (val && !state.inventory.includes(val)) {
@@ -279,6 +280,9 @@
     function renderInventory() {
       const list = document.getElementById("inventoryList");
       list.innerHTML = "";
+      if (state.inventory.length === 0) {
+        list.innerHTML = "<span style='color:var(--text-sub); font-size:14px;'>冷蔵庫は空です</span>";
+      }
       state.inventory.forEach(item => {
         list.innerHTML += `<div class="list-item"><span>${item}</span><button class="btn-danger" style="width: auto; padding: 6px 16px; font-size:14px;" onclick="removeInventory('${item}')">消費</button></div>`;
       });
@@ -296,7 +300,6 @@
 
     function addFromChip(item) { if(!state.inventory.includes(item)) { state.inventory.push(item); saveData(); renderAll(); } }
 
-    // 【AI画像認識】画像の圧縮と送信
     function resizeImage(file, maxWidth, maxHeight) {
       return new Promise((resolve) => {
         const reader = new FileReader();
@@ -310,7 +313,7 @@
             canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7)); // 品質70%で圧縮
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
           };
           img.src = e.target.result;
         };
@@ -323,10 +326,7 @@
       const file = event.target.files[0];
       if(!file) return;
       document.getElementById("aiStatus").innerText = "🔄 画像を最適化中...";
-      
-      // 画像を圧縮（エラー対策）
       const compressedDataUrl = await resizeImage(file, 800, 800);
-      
       document.getElementById("imagePreview").src = compressedDataUrl;
       document.getElementById("imagePreview").style.display = "block";
       document.getElementById("aiBtn").style.display = "block";
@@ -349,8 +349,8 @@
 出力は食材名のカンマ区切りのみ。
 【登録済み食材リスト】 ${allIngs.join(', ')}`;
 
-      // 最新の 3.5-flash モデルを使用
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      // 🔥 正しいモデル名（gemini-3.6-flash）に修正しました！
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
       
       try {
         const res = await fetch(url, {
@@ -360,6 +360,12 @@
         });
         
         const json = await res.json();
+        
+        // API側でエラーが出た場合は詳細を表示する
+        if (!res.ok) {
+           throw new Error(json.error ? json.error.message : "APIエラーが発生しました");
+        }
+
         if(json.candidates && json.candidates.length > 0) {
           const text = json.candidates[0].content.parts[0].text;
           const detected = text.split(',').map(i=>i.trim()).filter(i=>i);
@@ -368,16 +374,16 @@
           
           if(added > 0) saveData();
           renderAll();
-          status.innerHTML = `<span style="color:#34c759;font-weight:bold;">✨ ${added}個追加しました！(${detected.join(', ')})</span>`;
+          status.innerHTML = `<span style="color:#34c759;font-weight:bold;">✨ ${added}個追加しました！<br>(${detected.join(', ')})</span>`;
         } else {
           status.innerText = "⚠️ 食材を認識できませんでした。";
         }
       } catch (e) {
-        status.innerText = "⚠️ エラーが発生しました。";
+        status.innerHTML = `<span style="color:var(--danger);">⚠️ エラー: ${e.message}</span>`;
       }
     }
 
-    // 【レシピ管理 (編集機能追加！)】
+    // 【レシピ管理】
     function editRecipe(name) {
       const r = state.recipes.find(x => x.name === name);
       if(!r) return;
@@ -391,11 +397,15 @@
       const seasons = r.season.split(',').map(s=>s.trim());
       Array.from(select.options).forEach(opt => { opt.selected = seasons.includes(opt.value); });
       
-      document.getElementById("recipeFormTitle").innerHTML = "✏️ レシピを編集";
-      document.getElementById("recipeSubmitBtn").innerText = "上書き保存する";
-      document.getElementById("recipeCancelBtn").style.display = "block";
+      // 🌟 編集モードになったことを分かりやすくするUI変更
+      document.getElementById("recipeFormTitle").innerHTML = `✏️ 「${name}」を編集中`;
+      const submitBtn = document.getElementById("recipeSubmitBtn");
+      submitBtn.innerText = "上書き保存する";
+      submitBtn.style.backgroundColor = "#ff9500"; // オレンジ色に変更
       
-      // フォームの位置までスクロール
+      document.getElementById("recipeCancelBtn").style.display = "block";
+      document.getElementById("recipeFormCard").style.border = "2px solid #ff9500";
+      
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -406,8 +416,13 @@
       document.getElementById("rDiff").value = "3";
       document.getElementById("diffLabel").innerText = "3";
       document.getElementById("recipeFormTitle").innerHTML = "📝 新規レシピ登録";
-      document.getElementById("recipeSubmitBtn").innerText = "追加する";
+      
+      const submitBtn = document.getElementById("recipeSubmitBtn");
+      submitBtn.innerText = "追加する";
+      submitBtn.style.backgroundColor = "var(--primary-color)";
+      
       document.getElementById("recipeCancelBtn").style.display = "none";
+      document.getElementById("recipeFormCard").style.border = "2px solid transparent";
     }
 
     function saveRecipe() {
@@ -419,7 +434,6 @@
 
       if (name && ings) {
         if(editingRecipeName) {
-           // 編集モード
            if (name !== editingRecipeName && state.recipes.some(r => r.name === name)) {
              alert("既に同じ名前のレシピが存在します"); return;
            }
@@ -428,44 +442,7 @@
            alert("レシピを更新しました！");
            cancelEdit();
         } else {
-           // 新規モード
            if(state.recipes.some(r => r.name === name)) {
              alert("既に登録されています"); return;
            }
-           state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons });
-           alert("レシピを追加しました！");
-           cancelEdit();
-        }
-        saveData(); renderAll();
-      } else { alert("未入力の項目があります。"); }
-    }
-
-    function removeRecipe(name) {
-      if(confirm(`「${name}」を削除してもよろしいですか？`)) {
-        state.recipes = state.recipes.filter(r => r.name !== name);
-        saveData(); renderAll();
-      }
-    }
-
-    function renderRecipeList() {
-      const list = document.getElementById("recipeList");
-      list.innerHTML = "";
-      state.recipes.forEach(r => {
-        list.innerHTML += `
-          <div class="list-item" style="display:block;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-weight:600;">${r.name}</span>
-              <div>
-                <button class="btn-secondary" style="width: auto; padding: 6px 12px; font-size:14px; margin-right:4px;" onclick="editRecipe('${r.name}')">編集</button>
-                <button class="btn-danger" style="width: auto; padding: 6px 12px; font-size:14px;" onclick="removeRecipe('${r.name}')">削除</button>
-              </div>
-            </div>
-            <div style="font-size:13px; color:var(--text-sub); margin-top:4px;">難易度: ${r.difficulty} | 季節: ${r.season}</div>
-            <div style="font-size:14px; margin-top:4px;">🥕 ${r.ingredients}</div>
-          </div>
-        `;
-      });
-    }
-  </script>
-</body>
-</html>
+           state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons })
