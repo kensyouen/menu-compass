@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>献立コンパス</title>
+  <style>
+    /* 🍏 iOS風のスタイリング */
+    :root {
+      --bg-color: #f2f2f7;
+      --card-bg: #ffffff;
+      --primary-color: #007aff;
+      --text-main: #000000;
+      --text-sub: #8e8e93;
+      --border-color: #c6c6c8;
+      --danger: #ff3b30;
+      --safe-top: env(safe-area-inset-top, 44px);
+      --safe-bottom: env(safe-area-inset-bottom, 34px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background-color: var(--bg-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text-main);
+      overflow-x: hidden;
+      padding-top: var(--safe-top);
+      padding-bottom: calc(83px + var(--safe-bottom));
+    }
+    header { padding: 16px 20px 8px; }
+    h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 0 16px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card-title { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+    button {
+      border: none; border-radius: 10px; font-size: 17px; font-weight: 600;
+      padding: 12px; width: 100%; cursor: pointer; transition: opacity 0.2s;
+    }
+    button:active { opacity: 0.7; }
+    .btn-primary { background: var(--primary-color); color: #fff; }
+    .btn-secondary { background: #e5e5ea; color: var(--primary-color); }
+    .btn-danger { background: #ffebee; color: var(--danger); }
+    input, select {
+      width: 100%; padding: 12px; font-size: 17px; border: 1px solid #e5e5ea;
+      border-radius: 10px; margin-bottom: 12px; background: #fafafa;
+    }
+    .list-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 0.5px solid #e5e5ea;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .strikethrough { text-decoration: line-through; color: var(--text-sub); }
+    .tab-bar {
+      position: fixed; bottom: 0; width: 100%;
+      height: calc(55px + var(--safe-bottom));
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 0.5px solid var(--border-color);
+      display: flex; justify-content: space-around; align-items: center;
+      padding-bottom: var(--safe-bottom); z-index: 1000;
+    }
+    .tab-item {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--text-sub); font-size: 10px; font-weight: 500; width: 33%; height: 50px;
+    }
+    .tab-item.active { color: var(--primary-color); }
+    .tab-icon { font-size: 24px; margin-bottom: 2px; }
+    .view { display: none; animation: fadeIn 0.3s; }
+    .view.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .chip-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .chip {
+      background: #e5e5ea; color: var(--primary-color); padding: 6px 12px;
+      border-radius: 16px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;
+    }
+    #loading {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--bg-color); z-index: 9999; display: flex;
+      flex-direction: column; justify-content: center; align-items: center; font-size: 17px; font-weight: 600; color: var(--text-sub);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ローディング画面 -->
+  <div id="loading">
+    <div style="font-size: 40px; margin-bottom: 16px;">🍳</div>
+    データを同期中...
+  </div>
+
+  <div id="app" style="display:none;">
+    
+    <!-- 🏠 ホームビュー -->
+    <div id="view-home" class="view active">
+      <header><h1>ホーム</h1></header>
+      
+      <div class="card">
+        <div class="card-title">何日分の献立を作りますか？</div>
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
+          <input type="range" id="planDays" min="1" max="7" value="3" style="flex:1; margin:0;" oninput="document.getElementById('daysLabel').innerText = this.value + '日分'">
+          <span id="daysLabel" style="font-weight: 600; width: 50px; text-align: right;">3日分</span>
+        </div>
+        <button class="btn-primary" onclick="generateMenu()">✨ 献立を自動生成</button>
+      </div>
+
+      <div id="menuContainer"></div>
+      
+      <div class="card" id="copyCard" style="display:none;">
+        <button class="btn-secondary" onclick="copyToClipboard()">📱 LINE用にコピー</button>
+      </div>
+    </div>
+
+    <!-- ❄️ 冷蔵庫ビュー -->
+    <div id="view-inventory" class="view">
+      <header><h1>冷蔵庫</h1></header>
+      
+      <div class="card">
+        <div class="card-title">✍️ 手動で追加</div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="invInput" placeholder="食材名" style="margin:0;">
+          <button class="btn-primary" style="width: 80px;" onclick="addInventoryManual()">追加</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📷 写真をAIで読み取る</div>
+        <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)">
+        <img id="imagePreview" style="width: 100%; border-radius: 8px; margin-bottom: 12px; display: none;">
+        <button class="btn-primary" id="aiBtn" style="display:none;" onclick="analyzeImage()">✨ AIで解析する</button>
+        <div id="aiStatus" style="margin-top: 8px; font-size: 14px; color: var(--text-sub);"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">💡 レシピ食材からワンタップ追加</div>
+        <div id="chipContainer" class="chip-container"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">現在の在庫</div>
+        <div id="inventoryList"></div>
+      </div>
+    </div>
+
+    <!-- 🍳 レシピビュー -->
+    <div id="view-recipe" class="view">
+      <header><h1>レシピ管理</h1></header>
+      
+      <div class="card">
+        <div class="card-title">📝 新規レシピ登録</div>
+        <input type="text" id="rName" placeholder="料理名">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <span style="font-weight: 600;">難易度: <span id="diffLabel">3</span></span>
+          <input type="range" id="rDiff" min="1" max="5" value="3" style="width: 60%; margin:0;" oninput="document.getElementById('diffLabel').innerText = this.value">
+        </div>
+        <input type="text" id="rIngs" placeholder="必要な食材 (カンマ区切り)">
+        <select id="rSeason" multiple style="height: 120px;">
+          <option value="通年" selected>通年</option>
+          <option value="春">春 (3-5月)</option>
+          <option value="夏">夏 (6-8月)</option>
+          <option value="秋">秋 (9-11月)</option>
+          <option value="冬">冬 (12-2月)</option>
+        </select>
+        <button class="btn-primary" onclick="addRecipe()">追加する</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">登録済みレシピ一覧</div>
+        <div id="recipeList"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ボトムタブバー -->
+  <nav class="tab-bar">
+    <div class="tab-item active" onclick="switchTab('home')">
+      <div class="tab-icon">🏠</div>
+      <span>ホーム</span>
+    </div>
+    <div class="tab-item" onclick="switchTab('recipe')">
+      <div class="tab-icon">🍳</div>
+      <span>レシピ</span>
+    </div>
+    <div class="tab-item" onclick="switchTab('inventory')">
+      <div class="tab-icon">❄️</div>
+      <span>冷蔵庫</span>
+    </div>
+  </nav>
+
+  <script>
+    // ==========================================
+    // ⚙️ 設定（★GASのURLだけ書き換えてください！）
+    // ==========================================
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyFpfCoGKjKajVX6glFXsT-X14YuqUkI2Yjya1wdDCGe5F7-CbM__ZEMDi3D805TCMW/exec";
+    
+    // APIキーはGitHubにアップロードせず、初回利用時にiPhone内に保存する仕組みにしました
+    let GEMINI_API_KEY = localStorage.getItem("gemini_api_key") || "";
+
+    // アプリのデータ状態
+    let state = {
+      recipes: [],
+      inventory: [],
+      history: [],
+      currentMenu: []
+    };
+
+    // --- 1. アプリ初期化と通信 ---
+    window.onload = async () => {
+      await fetchData();
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      renderAll();
+    };
+
+    function jsonp(action, payload = null) {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'jsonp_cb_' + Math.round(100000 * Math.random());
+        window[callbackName] = function(data) {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          resolve(data);
+        };
+        let url = `${GAS_URL}?action=${action}&callback=${callbackName}`;
+        if (payload) url += `&payload=${encodeURIComponent(JSON.stringify(payload))}`;
+        
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    }
+
+    async function fetchData() {
+      try {
+        const res = await jsonp('getData');
+        if(res.status === 'success') {
+          state.recipes = res.recipes || [];
+          state.inventory = res.inventory || [];
+          state.history = res.history || [];
+        }
+      } catch (e) { alert("データの読み込みに失敗しました。"); }
+    }
+
+    async function saveData() {
+      jsonp('saveData', { recipes: state.recipes, inventory: state.inventory, history: state.history });
+    }
+
+    // --- 2. 画面切り替え ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      document.getElementById(`view-${tabId}`).classList.add('active');
+      event.currentTarget.classList.add('active');
+      renderAll();
+    }
+
+    // --- 3. 描画とロジック処理 ---
+    function renderAll() {
+      renderMenu();
+      renderInventory();
+      renderChips();
+      renderRecipeList();
+    }
+
+    // 【献立ロジック】
+    function getCurrentSeason() {
+      const m = new Date().getMonth() + 1;
+      return (m>=3 && m<=5) ? '春' : (m>=6 && m<=8) ? '夏' : (m>=9 && m<=11) ? '秋' : '冬';
+    }
+
+    function generateMenu() {
+      const days = parseInt(document.getElementById('planDays').value);
+      const current = getCurrentSeason();
+      let available = state.recipes.filter(r => r.season.includes('通年') || r.season.includes(current));
+      let pool = available.filter(r => !state.history.includes(r.name));
+      
+      if (pool.length < days) pool = available;
+      pool = pool.sort(() => 0.5 - Math.random());
+      
+      let selected = [];
+      let highDiff = 0;
+
+      for (let r of pool) {
+        if (selected.length === days) break;
+        if (parseInt(r.difficulty) >= 4) {
+          if (highDiff === 0) { selected.push(r.name); highDiff++; }
+        } else {
+          selected.push(r.name);
+        }
+      }
+
+      state.currentMenu = selected;
+      state.history = [...selected];
+      saveData();
+      renderMenu();
+    }
+
+    function renderMenu() {
+      const container = document.getElementById("menuContainer");
+      container.innerHTML = "";
+      if (state.currentMenu.length === 0) {
+        document.getElementById("copyCard").style.display = "none";
+        return;
+      }
+      document.getElementById("copyCard").style.display = "block";
+      
+      const allRecipeNames = state.recipes.map(r => r.name);
+
+      state.currentMenu.forEach((menuName, i) => {
+        const recipe = state.recipes.find(r => r.name === menuName);
+        if(!recipe) return;
+        
+        const ings = recipe.ingredients.split(',').map(item => item.trim()).filter(i=>i);
+        let ingsHtml = "";
+        
+        ings.forEach(ing => {
+          if (state.inventory.includes(ing)) {
+            ingsHtml += `<span class="strikethrough">~${ing}~</span>, `;
+          } else {
+            ingsHtml += `<span>${ing}</span>, `;
+          }
+        });
+        
+        let selectHtml = `<select onchange="changeMenu(${i}, this.value)">`;
+        allRecipeNames.forEach(name => {
+          selectHtml += `<option value="${name}" ${name === menuName ? 'selected' : ''}>${name}</option>`;
+        });
+        selectHtml += `</select>`;
+
+        container.innerHTML += `
+          <div class="card">
+            <div style="font-size: 14px; color: var(--primary-color); margin-bottom: 4px;">Day ${i+1}</div>
+            ${selectHtml}
+            <div style="font-size: 14px; color: var(--text-sub); margin-bottom: 8px;">難易度: ${recipe.difficulty}</div>
+            <div style="font-size: 15px;">🥕 ${ingsHtml.slice(0, -2)}</div>
+          </div>
+        `;
+      });
+    }
+
+    function changeMenu(index, newName) {
+      state.currentMenu[index] = newName;
+      state.history = [...state.currentMenu];
+      saveData();
+      renderMenu();
+    }
+
+    function copyToClipboard() {
+      let text = "🍳 今週の献立\n\n";
+      state.currentMenu.forEach((menuName, i) => {
+        const recipe = state.recipes.find(r => r.name === menuName);
+        text += `【Day ${i+1}】${menuName}\n`;
+        if(recipe) {
+          const buy = recipe.ingredients.split(',').map(item => item.trim()).filter(ing => ing && !state.inventory.includes(ing));
+          text += `🛒 買うもの: ${buy.length > 0 ? buy.join(', ') : 'なし'}\n\n`;
+        }
+      });
+      
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => alert("LINE用にコピーしました！"));
+      } else {
+        alert("コピー機能がサポートされていません。");
+      }
+    }
+
+    // 【冷蔵庫ロジック】
+    function addInventoryManual() {
+      const val = document.getElementById("invInput").value.trim();
+      if (val && !state.inventory.includes(val)) {
+        state.inventory.push(val);
+        document.getElementById("invInput").value = "";
+        saveData();
+        renderAll();
+      }
+    }
+
+    function removeInventory(item) {
+      state.inventory = state.inventory.filter(i => i !== item);
+      saveData();
+      renderAll();
+    }
+
+    function renderInventory() {
+      const list = document.getElementById("inventoryList");
+      list.innerHTML = "";
+      state.inventory.forEach(item => {
+        list.innerHTML += `
+          <div class="list-item">
+            <span>${item}</span>
+            <button class="btn-danger" style="width: auto; padding: 6px 16px; font-size:14px;" onclick="removeInventory('${item}')">消費</button>
+          </div>
+        `;
+      });
+    }
+
+    function renderChips() {
+      const container = document.getElementById("chipContainer");
+      container.innerHTML = "";
+      let allIngs = [];
+      state.recipes.forEach(r => {
+        r.ingredients.split(',').forEach(i => {
+          const name = i.trim();
+          if(name && !allIngs.includes(name)) allIngs.push(name);
+        });
+      });
+      
+      const missing = allIngs.filter(ing => !state.inventory.includes(ing));
+      if(missing.length === 0) {
+        container.innerHTML = "<span style='color:var(--text-sub); font-size:14px;'>すべての食材が揃っています</span>";
+        return;
+      }
+      
+      missing.forEach(item => {
+        container.innerHTML += `<div class="chip" onclick="addFromChip('${item}')">＋ ${item}</div>`;
+      });
+    }
+
+    function addFromChip(item) {
+      if(!state.inventory.includes(item)) {
+        state.inventory.push(item);
+        saveData();
+        renderAll();
+      }
+    }
+
+    // 【AI画像認識】フロントエンドから直接Geminiを叩く
+    let base64ImgData = "";
+    function previewImage(event) {
+      const file = event.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        document.getElementById("imagePreview").src = e.target.result;
+        document.getElementById("imagePreview").style.display = "block";
+        document.getElementById("aiBtn").style.display = "block";
+        base64ImgData = e.target.result.split(',')[1];
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function analyzeImage() {
+      // 🌟 初回のみAPIキーを入力させるポップアップを表示
+      if (!GEMINI_API_KEY) {
+        const inputKey = prompt("【初回設定】\nGeminiのAPIキーを入力してください。\n(キーはこのiPhone内に安全に保存されます)");
+        if (inputKey) {
+          GEMINI_API_KEY = inputKey.trim();
+          localStorage.setItem("gemini_api_key", GEMINI_API_KEY);
+        } else {
+          return; // キャンセルした場合は処理を中止
+        }
+      }
+
+      const status = document.getElementById("aiStatus");
+      status.innerText = "🔄 AIが画像を解析中...";
+      
+      const allIngs = [...new Set(state.recipes.flatMap(r => r.ingredients.split(',').map(i=>i.trim()).filter(i=>i)))];
+      const promptText = `画像に写っている食材をカンマ区切りで出力してください。
+【重要】飲み物や調味料は絶対に除外してください。
+以下の【登録済み食材リスト】にある場合はリストの表記に合わせること。
+出力は食材名のカンマ区切りのみ。
+【登録済み食材リスト】 ${allIngs.join(', ')}`;
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [ { text: promptText }, { inline_data: { mime_type: "image/jpeg", data: base64ImgData } } ] }]
+          })
+        });
+        
+        const json = await res.json();
+        if(json.candidates && json.candidates.length > 0) {
+          const text = json.candidates[0].content.parts[0].text;
+          const detected = text.split(',').map(i=>i.trim()).filter(i=>i);
+          
+          let added = 0;
+          detected.forEach(item => {
+            if(!state.inventory.includes(item)) {
+              state.inventory.push(item);
+              added++;
+            }
+          });
+          
+          if(added > 0) saveData();
+          renderAll();
+          status.innerHTML = `<span style="color:#34c759;font-weight:bold;">✨ ${added}個追加しました！(${detected.join(', ')})</span>`;
+        } else {
+          status.innerText = "⚠️ 食材を認識できませんでした。";
+        }
+      } catch (e) {
+        status.innerText = "⚠️ エラーが発生しました。APIキーが間違っている可能性があります。再度お試しください。";
+        // エラー時はキーをリセットして再度入力を促す
+        localStorage.removeItem("gemini_api_key");
+        GEMINI_API_KEY = "";
+      }
+    }
+
+    // 【レシピ管理】
+    function addRecipe() {
+      const name = document.getElementById("rName").value.trim();
+      const diff = document.getElementById("rDiff").value;
+      const ings = document.getElementById("rIngs").value.trim();
+      const seasonSelect = document.getElementById("rSeason");
+      const seasons = Array.from(seasonSelect.selectedOptions).map(opt => opt.value).join(', ');
+
+      if (name && ings) {
+        if(state.recipes.some(r => r.name === name)) {
+          alert("既に登録されています"); return;
+        }
+        state.recipes.push({ name: name, difficulty: diff, ingredients: ings, season: seasons });
+        
+        document.getElementById("rName").value = "";
+        document.getElementById("rIngs").value = "";
+        saveData();
+        renderAll();
+        alert("レシピを追加しました！");
+      } else {
+        alert("未入力の項目があります。");
+      }
+    }
+
+    function removeRecipe(name) {
+      if(confirm(`「${name}」を削除してもよろしいですか？`)) {
+        state.recipes = state.recipes.filter(r => r.name !== name);
+        saveData();
+        renderAll();
+      }
+    }
+
+    function renderRecipeList() {
+      const list = document.getElementById("recipeList");
+      list.innerHTML = "";
+      state.recipes.forEach(r => {
+        list.innerHTML += `
+          <div class="list-item" style="display:block;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight:600;">${r.name}</span>
+              <button class="btn-danger" style="width: auto; padding: 6px 12px; font-size:14px;" onclick="removeRecipe('${r.name}')">削除</button>
+            </div>
+            <div style="font-size:13px; color:var(--text-sub); margin-top:4px;">難易度: ${r.difficulty} | 季節: ${r.season}</div>
+            <div style="font-size:14px; margin-top:4px;">🥕 ${r.ingredients}</div>
+          </div>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>
